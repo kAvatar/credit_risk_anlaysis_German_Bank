@@ -1,0 +1,204 @@
+---
+title: "Credit Risk Scroring"
+author: "Presented by:- Kanika Sharma, ESC Rennes School of Business"
+date: "3 March 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Let's load the libraries.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(gmodels)
+library(pROC)
+library(ggplot2)
+ library(ROCR)
+```
+Load the data
+
+```{r cars}
+credit_data <- read.csv("D:/Desktop/DirectMarketing/german_credit.csv",header = TRUE, sep = ',')
+str(credit_data)
+```
+
+## Including Plots
+```{r}
+summary(credit_data$Account.Balance)
+summary(credit_data$Credit.Amount)
+summary(credit_data$Duration.of.Credit..month. )
+brksCredit <- seq(0, 80, 10) 
+# boxplot(credit_data$Acount.Balance, bty="n",xlab = "Account Balance", cex=0.4)
+# boxplot(credit_data$credit.Amount, bty="n",xlab = "credit Amount", cex=0.4)
+boxplot(credit_data$Duration.of.Credit..month., bty="n",xlab = "Skewness of Duration.of.Credit..mont", cex=0.4)
+```
+
+Removing the numerical columns and converting the rest to factors
+
+```{r pressure, echo=FALSE}
+c <- credit_data
+S <- c(1, 2, 3,4, 5,6, 7, 8, 9, 10, 11, 12, 13,14, 15, 16, 17, 18, 19, 20)
+for(i in S) credit_data[, i] <- as.factor(credit_data[, i])
+#scatter plot
+pairs(credit_data[ ,1:6])
+pairs(credit_data[,1:6],bg=c("red")[credit_data$Credit.Amount],
+        pch=21,main="german Credit Data") #to show color grouping)
+```
+
+
+```{r}
+c$Credit.Amount <- as.numeric(c$Credit.Amount)
+# str(credit_data)
+
+histogram <- hist(c$Credit.Amount, breaks = 200, xlab = "Loan Amount", 
+               main = "Distribution of the Loan Amount",col = "DarkBlue")
+```
+
+
+lets break the data into train and test
+
+```{r}
+
+n = nrow(credit_data)
+trainIndex = sample(1:n, size = round(0.7*n), replace=FALSE)
+train = credit_data[trainIndex ,]
+test = credit_data[-trainIndex ,]
+# str(train)
+#descpitive statistics of the columns
+with(train, table(Creditability, Account.Balance))
+# library(ggplot2)
+
+```
+
+```{r}
+```
+```{r}
+CrossTable(credit_data$Creditability, credit_data$Account.Balance, digits=1, prop.r=F, prop.t=F, prop.chisq=F, chisq=T)
+table1 <- CrossTable(credit_data$Account.Balance,credit_data$Creditability,
+                    prop.r = TRUE,prop.c = FALSE,prop.t = FALSE,prop.chisq = FALSE)
+plot(table1$prop.tbl,col = c("red","green"),xlab = "Grade of the customer",ylab = "1 - Default    0 - Non-default")
+```
+
+
+Let's try Different methods
+Method 1. logistic regression
+apply logistic maintainent
+
+```{r}
+set.seed(100)
+Method_logistic_few <- glm(Creditability ~ Account.Balance + Payment.Status.of.Previous.Credit + Purpose + Length.of.current.employment + Sex...Marital.Status, family = binomial, data = train)
+summary(Method_logistic_few)
+```
+
+
+predict it and create the table
+```{r}
+pred_logisitic <- predict(Method_logistic_few, type = 'response', newdata =test)
+
+
+```
+
+```{r}
+# library(ROCR)
+prediction1 <- prediction(pred_logisitic, test$Creditability)
+performance1 <- performance(prediction1, 'tpr', 'fpr')
+plot(performance1, colorize=TRUE,main =" ROC Curve for Logistic Regression")
+AUCLog1 <- performance(prediction1, measure = 'auc')@y.values[[1]]
+AUCLog1
+```
+
+
+And second method to include all variables in logistic regression
+```{r}
+set.seed(100)
+Method_logistic_all <- glm(Creditability ~ Account.Balance + Payment.Status.of.Previous.Credit + Purpose + Value.Savings.Stocks + Length.of.current.employment + Sex...Marital.Status + Most.valuable.available.asset + Type.of.apartment + Concurrent.Credits +  Age..years., family=binomial, data = train)
+summary(Method_logistic_all)
+# pred_logistic_all <- predict(Method_logistic_all, type = 'response', newdata =test)
+
+```
+
+
+
+Method 3 Regression tree
+```{r}
+library(rpart)
+set.seed(1)
+# Method_decisiontree <- rpart(Creditability ~ ., data = train)
+Method_decisiontree <- rpart(Creditability ~ Account.Balance + Payment.Status.of.Previous.Credit + Purpose + Value.Savings.Stocks + Length.of.current.employment + Sex...Marital.Status, data = train)
+library(rpart.plot)
+summary(Method_decisiontree)
+prp(Method_decisiontree, type = 2, extra = 1)
+```
+
+predict table
+```{r}
+pred_decisiontree <- predict(Method_decisiontree, newdata =test, type = 'prob')[, 2]
+```
+```{r}
+prediction3 <- prediction(pred_decisiontree, test$Creditability)
+performance3 <- performance(prediction3, 'tpr', 'fpr')
+plot(performance3, colorize=TRUE,main ="roc curve for Decision tree")
+```
+
+```{r}
+AUCTree <- performance(prediction3, measure = 'auc')@y.values[[1]]
+AUCTree
+```
+
+
+Last but not the least- Random forest
+```{r}
+library(randomForest)
+set.seed(100)
+method_randomforest <- randomForest(Creditability ~ Account.Balance + Payment.Status.of.Previous.Credit + Purpose + Value.Savings.Stocks + Length.of.current.employment + Sex...Marital.Status + Most.valuable.available.asset + Type.of.apartment + Concurrent.Credits +  Age..years., data = train)
+plot(method_randomforest,main ="Random Forest")
+summary(method_randomforest)
+pred_randomforest <- predict(method_randomforest, newdata =test, type = 'prob')[, 2]
+table(test$Creditability, as.numeric(pred_randomforest >= 0.5))
+# table(pred_randomforest,test$Credibility)
+
+```
+```{r}
+importance(method_randomforest)
+
+```
+
+```{r}
+varImpPlot(method_randomforest,main="Gini Index",cex=0.8)
+
+```
+
+
+
+
+```{r}
+prediction4 <- prediction(pred_randomforest, test$Creditability)
+performance4 <- performance(prediction4, 'tpr', 'fpr')
+plot(performance4, colorize=TRUE, main ="ROC Curve for Random Forest")
+```
+
+
+
+
+```{r}
+AUCRF <- performance(prediction4, measure = 'auc')@y.values[[1]]
+AUCRF
+```
+
+
+
+```{r}
+AUCLog1 <- performance(prediction1, measure = 'auc')@y.values[[1]]
+AUCLog1
+```
+
+
+
+```
+
